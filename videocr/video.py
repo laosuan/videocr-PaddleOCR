@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import List
 import cv2
 import numpy as np
+import json
 
 from . import utils
 from .models import PredictedFrames, PredictedSubtitle
@@ -21,6 +22,9 @@ class Video:
     ocr: PaddleOCR
     pred_frames: List[PredictedFrames]
     pred_subs: List[PredictedSubtitle]
+    # 定义时间偏移常量（负值表示提前显示字幕）
+    # 这是为了修正观察到的字幕延迟问题，经测试约为0.15秒
+    TIME_OFFSET_SECONDS = -0.15
 
     def __init__(self, path: str, det_model_dir: str, rec_model_dir: str):
         self.path = path
@@ -39,6 +43,9 @@ class Video:
         self.use_fullframe = use_fullframe
         self.pred_frames = []
         ocr = PaddleOCR(lang=self.lang, rec_model_dir=self.rec_model_dir, det_model_dir=self.det_model_dir, use_gpu=use_gpu)
+
+        # 创建一个字典来存储每帧的识别结果
+        frames_data = {}
 
         ocr_start = utils.get_frame_index(time_start, self.fps) if time_start else 0
         ocr_end = utils.get_frame_index(time_end, self.fps) if time_end else self.num_frames
@@ -85,17 +92,39 @@ class Video:
 
                     predicted_frames = PredictedFrames(i + ocr_start, ocr.ocr(frame), conf_threshold_percent)
                     self.pred_frames.append(predicted_frames)
+                    
+                    # 保存每帧的识别结果，包含更多详细信息
+                    frame_index = i + ocr_start
+                    
+                    # 应用相同的时间偏移
+                    offset_frame_index = max(0, frame_index + int(self.TIME_OFFSET_SECONDS * self.fps))
+                    
+                    frame_time = utils.get_srt_timestamp(offset_frame_index, self.fps)
+                    frames_data[frame_index] = {
+                        "frame_index": frame_index,
+                        "adjusted_frame_index": offset_frame_index,
+                        "time": frame_time,
+                        "text": predicted_frames.text,
+                        "confidence": predicted_frames.confidence
+                    }
                 else:
                     v.read()
         
+        # 将所有帧的识别结果保存到文件
+        with open('frame_ocr_results.json', 'w', encoding='utf-8') as f:
+            json.dump(frames_data, f, ensure_ascii=False, indent=2)
 
     def get_subtitles(self, sim_threshold: int) -> str:
         self._generate_subtitles(sim_threshold)
+        
+        # 转换为帧数偏移量
+        frame_offset = int(self.TIME_OFFSET_SECONDS * self.fps)
+        
         return ''.join(
             '{}\n{} --> {}\n{}\n\n'.format(
                 i,
-                utils.get_srt_timestamp(sub.index_start, self.fps),
-                utils.get_srt_timestamp(sub.index_end, self.fps),
+                utils.get_srt_timestamp(max(0, sub.index_start + frame_offset), self.fps),  # 确保不为负值
+                utils.get_srt_timestamp(max(0, sub.index_end + frame_offset), self.fps),    # 确保不为负值
                 sub.text)
             for i, sub in enumerate(self.pred_subs))
 

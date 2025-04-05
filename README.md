@@ -1,3 +1,8 @@
+conda activate paddleocr
+
+conda install -c conda-forge libstdcxx-ng=12.3.0
+
+
 # videocr
 
 Extract hardcoded (burned-in) subtitles from videos using the [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) OCR engine with Python. A Colab notebook for installing and running this library is included for convenience:
@@ -62,6 +67,20 @@ example.srt:
 
 ## Install prerequisites
 Python 3.7 - 3.10
+conda create -n paddleocr python=3.10
+conda activate paddleocr
+python -m pip install .
+python -m pip install paddlepaddle-gpu==2.6.2.post120 -i https://www.paddlepaddle.org.cn/packages/stable/cu120/
+
+
+
+
+
+
+
+
+
+
 
 paddlepaddle or paddlepaddle-gpu See https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/en/install/pip/linux-pip_en.html
 
