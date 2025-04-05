@@ -3,6 +3,8 @@ from typing import List
 import cv2
 import numpy as np
 import json
+import tqdm
+import logging
 
 from . import utils
 from .models import PredictedFrames, PredictedSubtitle
@@ -22,9 +24,6 @@ class Video:
     ocr: PaddleOCR
     pred_frames: List[PredictedFrames]
     pred_subs: List[PredictedSubtitle]
-    # 定义时间偏移常量（负值表示提前显示字幕）
-    # 这是为了修正观察到的字幕延迟问题，经测试约为0.15秒
-    TIME_OFFSET_SECONDS = -0.15
 
     def __init__(self, path: str, det_model_dir: str, rec_model_dir: str):
         self.path = path
@@ -42,7 +41,9 @@ class Video:
         self.lang = lang
         self.use_fullframe = use_fullframe
         self.pred_frames = []
-        ocr = PaddleOCR(lang=self.lang, rec_model_dir=self.rec_model_dir, det_model_dir=self.det_model_dir, use_gpu=use_gpu)
+        # Configure PaddleOCR to show only errors, no debug or warning messages
+        ocr = PaddleOCR(lang=self.lang, rec_model_dir=self.rec_model_dir, det_model_dir=self.det_model_dir, 
+                       use_gpu=use_gpu)
 
         # 创建一个字典来存储每帧的识别结果
         frames_data = {}
@@ -66,6 +67,15 @@ class Video:
             prev_grey = None
             predicted_frames = None
             modulo = frames_to_skip + 1
+            
+            # Calculate how many frames will actually be processed
+            actual_frames = (num_ocr_frames + modulo - 1) // modulo
+            print(f"Starting OCR processing on {actual_frames} frames...")
+            
+            # Create progress bar for OCR processing
+            pbar = tqdm.tqdm(total=actual_frames, desc="Recognizing text in frames", unit="frame")
+            
+            frames_processed = 0
             for i in range(num_ocr_frames):
                 if i % modulo == 0:
                     frame = v.read()[1]
@@ -90,25 +100,30 @@ class Video:
 
                         prev_grey = grey
 
-                    predicted_frames = PredictedFrames(i + ocr_start, ocr.ocr(frame), conf_threshold_percent)
+                    # Update progress bar before OCR processing of each frame
+                    frames_processed += 1
+                    pbar.update(1)
+                    
+                    # This is where OCR actually happens
+                    ocr_result = ocr.ocr(frame)
+                    predicted_frames = PredictedFrames(i + ocr_start, ocr_result, conf_threshold_percent)
                     self.pred_frames.append(predicted_frames)
                     
                     # 保存每帧的识别结果，包含更多详细信息
                     frame_index = i + ocr_start
                     
-                    # 应用相同的时间偏移
-                    offset_frame_index = max(0, frame_index + int(self.TIME_OFFSET_SECONDS * self.fps))
-                    
-                    frame_time = utils.get_srt_timestamp(offset_frame_index, self.fps)
+                    frame_time = utils.get_srt_timestamp(frame_index, self.fps)
                     frames_data[frame_index] = {
                         "frame_index": frame_index,
-                        "adjusted_frame_index": offset_frame_index,
                         "time": frame_time,
                         "text": predicted_frames.text,
                         "confidence": predicted_frames.confidence
                     }
                 else:
                     v.read()
+            
+            pbar.close()  # Close progress bar when done
+            print(f"OCR completed on {frames_processed} frames")
         
         # 将所有帧的识别结果保存到文件
         with open('frame_ocr_results.json', 'w', encoding='utf-8') as f:
@@ -117,14 +132,11 @@ class Video:
     def get_subtitles(self, sim_threshold: int) -> str:
         self._generate_subtitles(sim_threshold)
         
-        # 转换为帧数偏移量
-        frame_offset = int(self.TIME_OFFSET_SECONDS * self.fps)
-        
         return ''.join(
             '{}\n{} --> {}\n{}\n\n'.format(
                 i,
-                utils.get_srt_timestamp(max(0, sub.index_start + frame_offset), self.fps),  # 确保不为负值
-                utils.get_srt_timestamp(max(0, sub.index_end + frame_offset), self.fps),    # 确保不为负值
+                utils.get_srt_timestamp(sub.index_start, self.fps),
+                utils.get_srt_timestamp(sub.index_end, self.fps),
                 sub.text)
             for i, sub in enumerate(self.pred_subs))
 
@@ -135,10 +147,13 @@ class Video:
             raise AttributeError(
                 'Please call self.run_ocr() first to perform ocr on frames')
 
+        # Add progress bar for subtitle generation
+        print("Generating subtitles...")
         max_frame_merge_diff = int(0.09 * self.fps)
-        for frame in self.pred_frames:
+        for frame in tqdm.tqdm(self.pred_frames, desc="Generating subtitles", unit="frame"):
             self._append_sub(PredictedSubtitle([frame], sim_threshold), max_frame_merge_diff)
         self.pred_subs = [sub for sub in self.pred_subs if len(sub.frames[0].lines) > 0]
+        print(f"Generated {len(self.pred_subs)} subtitle entries")
 
     def _append_sub(self, sub: PredictedSubtitle, max_frame_merge_diff: int) -> None:
         if len(sub.frames) == 0:
