@@ -5,6 +5,7 @@ import numpy as np
 import json
 import tqdm
 import logging
+import os
 
 from . import utils
 from .models import PredictedFrames, PredictedSubtitle
@@ -31,7 +32,7 @@ class Video:
         self.rec_model_dir = rec_model_dir
         with Capture(path) as v:
             self.num_frames = int(v.get(cv2.CAP_PROP_FRAME_COUNT))
-            self.fps = v.get(cv2.CAP_PROP_FPS)
+            self.fps = 24
             self.height = int(v.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     def run_ocr(self, use_gpu: bool, lang: str, time_start: str, time_end: str,
@@ -79,11 +80,32 @@ class Video:
             for i in range(num_ocr_frames):
                 if i % modulo == 0:
                     frame = v.read()[1]
+                    # 保存原始帧用于后续处理
+                    original_frame = frame.copy()
+                    
                     if not self.use_fullframe:
                         if crop_x_end and crop_y_end:
                             frame = frame[crop_y:crop_y_end, crop_x:crop_x_end]
+                            
+                            # # 创建保存裁剪帧的文件夹
+                            # cropped_frames_dir = 'cropped_frames'
+                            # os.makedirs(cropped_frames_dir, exist_ok=True)
+                            
+                            # # 保存裁剪后的帧，以frame_index命名
+                            # frame_index = i + ocr_start
+                            # frame_filename = os.path.join(cropped_frames_dir, f'frame_{frame_index}.jpg')
+                            # cv2.imwrite(frame_filename, frame)
                         else:
                             # only use bottom third of the frame by default
+                            
+                            # 创建保存裁剪帧的文件夹
+                            # cropped_frames_dir = 'cropped_frames'
+                            # os.makedirs(cropped_frames_dir, exist_ok=True)
+                            
+                            # # 保存裁剪后的帧，以frame_index命名
+                            # frame_index = i + ocr_start
+                            # frame_filename = os.path.join(cropped_frames_dir, f'frame_{frame_index}.jpg')
+                            # cv2.imwrite(frame_filename, frame)
                             frame = frame[self.height // 3:, :]
 
                     if brightness_threshold:
@@ -112,7 +134,15 @@ class Video:
                     # 保存每帧的识别结果，包含更多详细信息
                     frame_index = i + ocr_start
                     
-                    frame_time = utils.get_srt_timestamp(frame_index, self.fps)
+                    # 使用实际时间而不是帧索引计算时间戳，避免累积误差
+                    # 通过直接计算帧在视频中的实际时间点来获得更准确的时间戳
+                    actual_seconds = frame_index / self.fps
+                    h = int(actual_seconds // 3600)
+                    m = int((actual_seconds % 3600) // 60)
+                    s = int(actual_seconds % 60)
+                    ms = int((actual_seconds - int(actual_seconds)) * 1000)
+                    frame_time = '{:02d}:{:02d}:{:02d},{:03d}'.format(h, m, s, ms)
+                    
                     frames_data[frame_index] = {
                         "frame_index": frame_index,
                         "time": frame_time,

@@ -1,4 +1,4 @@
-conda activate paddleocr
+conda activate paddleocr && python example.py
 
 conda install -c conda-forge libstdcxx-ng=12.3.0
 
