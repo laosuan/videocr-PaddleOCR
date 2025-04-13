@@ -1,4 +1,4 @@
-conda activate paddleocr && python example.py
+cd ~/python/videocr-PaddleOCR && conda activate paddleocr && python example.py --video_path /media/mike/8T_01/VideoLingo_joy/output/Strangest_Animal_Fact__Why_Do_Animals_Eat_Their_Babies__Filial_Cannibalism__Dr._Binocs_Show.mp4
 
 conda install -c conda-forge libstdcxx-ng=12.3.0
 
@@ -7,6 +7,38 @@ conda install -c conda-forge libstdcxx-ng=12.3.0
 
 Extract hardcoded (burned-in) subtitles from videos using the [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) OCR engine with Python. A Colab notebook for installing and running this library is included for convenience:
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/oliverfei/videocr-PaddleOCR/blob/master/videocr_PaddleOCR.ipynb)
+
+## Basic Usage
+
+```bash
+# Basic usage with default parameters
+python example.py --video_path /path/to/your/video.mp4
+
+# With custom parameters
+python example.py --video_path /path/to/your/video.mp4 --lang en --sim-threshold 85 --conf-threshold 60 --crop-y 800
+```
+
+## Command-line Arguments
+
+The `example.py` script now accepts the following command-line arguments:
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--video_path` | Path to the video file | Default path in the script |
+| `--output`, `-o` | Output SRT file path | Based on input filename |
+| `--lang` | Language for OCR | en |
+| `--sim-threshold` | Similarity threshold | 80 |
+| `--conf-threshold` | Confidence threshold | 50 |
+| `--no-gpu` | Disable GPU usage | (GPU enabled by default) |
+| `--crop-x` | X coordinate for cropping | 0 |
+| `--crop-y` | Y coordinate for cropping | 900 |
+| `--crop-width` | Width for cropping | 2000 |
+| `--crop-height` | Height for cropping | 300 |
+| `--brightness-threshold` | Brightness threshold | 210 |
+| `--similar-image-threshold` | Similar image threshold | 0 |
+| `--frames-to-skip` | Frames to skip | 0 |
+
+## Example Code
 
 ```python
 # example.py
