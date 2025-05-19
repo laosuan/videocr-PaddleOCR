@@ -32,6 +32,10 @@ class Video:
         self.rec_model_dir = rec_model_dir
         with Capture(path) as v:
             self.num_frames = int(v.get(cv2.CAP_PROP_FRAME_COUNT))
+            print('self.fps', v.get(cv2.CAP_PROP_FPS))
+            # self.fps = 23.783608253002267
+            # self.fps = 23.976
+
             self.fps = 24
             self.height = int(v.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -168,7 +172,8 @@ class Video:
                 utils.get_srt_timestamp(sub.index_start, self.fps),
                 utils.get_srt_timestamp(sub.index_end, self.fps),
                 sub.text)
-            for i, sub in enumerate(self.pred_subs))
+            for i, sub in enumerate(self.pred_subs)
+            if len(sub.text) >= 2)
 
     def _generate_subtitles(self, sim_threshold: int) -> None:
         self.pred_subs = []
